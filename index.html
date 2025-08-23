@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>CryptoFortune</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: white;
+      text-align: center;
+    }
+    header {
+      padding: 20px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .menu {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin: 30px;
+    }
+    button {
+      padding: 15px;
+      border-radius: 12px;
+      border: none;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+    .inventory { background: #ff9800; }
+    .referral  { background: #4caf50; }
+    .roulette  { background: #2196f3; }
+    .back      { background: #9e9e9e; }
+    .screen { display: none; padding: 20px; }
+    .active { display: block; }
+  </style>
+</head>
+<body>
+  <header>🎡 CryptoFortune</header>
+  <div id="menu" class="menu">
+    <button class="inventory" onclick="openScreen('inventory')">🎁 Инвентарь</button>
+    <button class="referral" onclick="openScreen('referral')">🤝 Рефералка</button>
+    <button class="roulette" onclick="openScreen('roulette')">🎡 Рулетка</button>
+  </div>
+
+  <!-- Инвентарь -->
+  <div id="inventory" class="screen">
+    <h2>🎁 Инвентарь</h2>
+    <p>Тут будут твои подарки.</p>
+    <button onclick="alert('Вывод скоро будет доступен')">📤 Вывести подарок</button>
+    <button onclick="alert('Продажа скоро будет доступна')">💱 Продать за Stars</button>
+    <button class="back" onclick="goBack()">⬅ Назад</button>
+  </div>
+
+  <!-- Рефералка -->
+  <div id="referral" class="screen">
+    <h2>🤝 Реферальная система</h2>
+    <p>Баланс: <span id="balance">0</span>⭐</p>
+    <button onclick="alert('Скоро промо-материалы 🚀')">📢 Промо-материалы</button>
+    <button onclick="alert('Пригласи друга — получи бонус!')">👥 Пригласить</button>
+    <button class="back" onclick="goBack()">⬅ Назад</button>
+  </div>
+
+  <!-- Рулетка -->
+  <div id="roulette" class="screen">
+    <h2>🎡 Рулетка</h2>
+    <p>Выбирай ставку и крути!</p>
+    <button onclick="spin(200)">🎰 200⭐</button>
+    <button onclick="spin(1500)">🎰 1500⭐</button>
+    <button onclick="spin(10000)">🎰 10000⭐</button>
+    <button class="back" onclick="goBack()">⬅ Назад</button>
+  </div>
+
+  <script>
+    let tg = window.Telegram.WebApp;
+    tg.expand(); // развернуть на весь экран
+
+    function openScreen(id) {
+      document.getElementById("menu").style.display = "none";
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+    }
+    function goBack() {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById("menu").style.display = "flex";
+    }
+
+    function spin(price) {
+      const outcomes = ["⭐ 50 Stars", "⭐ 200 Stars", "🎁 NFT подарок", "❌ Ничего"];
+      const prize = outcomes[Math.floor(Math.random() * outcomes.length)];
+      alert(`Ты крутил за ${price}⭐ и выиграл: ${prize}`);
+    }
+  </script>
+</body>
+</html>
