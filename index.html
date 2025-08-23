@@ -2,103 +2,207 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>CryptoFortune</title>
+  <meta name="theme-color" content="#0f2d2b" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      color: white;
-      text-align: center;
-    }
-    header {
-      padding: 20px;
-      font-size: 24px;
-      font-weight: bold;
-    }
-    .menu {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      margin: 30px;
-    }
-    button {
-      padding: 15px;
-      border-radius: 12px;
-      border: none;
-      font-size: 18px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    button:hover {
-      transform: scale(1.05);
-      opacity: 0.9;
-    }
-    .inventory { background: #ff9800; }
-    .referral  { background: #4caf50; }
-    .roulette  { background: #2196f3; }
-    .back      { background: #9e9e9e; }
-    .screen { display: none; padding: 20px; }
-    .active { display: block; }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>🎡 CryptoFortune</header>
-  <div id="menu" class="menu">
-    <button class="inventory" onclick="openScreen('inventory')">🎁 Инвентарь</button>
-    <button class="referral" onclick="openScreen('referral')">🤝 Рефералка</button>
-    <button class="roulette" onclick="openScreen('roulette')">🎡 Рулетка</button>
-  </div>
+  <!-- Верхняя панель -->
+  <header class="topbar">
+    <div class="top-left">
+      <button class="chip btn-profile" id="btnProfile">👤 Профиль</button>
+    </div>
+    <div class="top-center">
+      <div class="app-title">CryptoFortune</div>
+      <div class="balances">
+        <span class="badge">🪙 <span id="coinsTop">0</span></span>
+        <span class="badge">⭐ <span id="starsTop">0</span></span>
+      </div>
+    </div>
+    <div class="top-right">
+      <button class="chip" id="btnExchange">↔️ Обмен</button>
+    </div>
+  </header>
 
-  <!-- Инвентарь -->
-  <div id="inventory" class="screen">
-    <h2>🎁 Инвентарь</h2>
-    <p>Тут будут твои подарки.</p>
-    <button onclick="alert('Вывод скоро будет доступен')">📤 Вывести подарок</button>
-    <button onclick="alert('Продажа скоро будет доступна')">💱 Продать за Stars</button>
-    <button class="back" onclick="goBack()">⬅ Назад</button>
-  </div>
+  <!-- Баннер-карусель (рефералка/промо) -->
+  <section class="carousel" id="carousel">
+    <!-- элементы меняются скриптом -->
+  </section>
 
-  <!-- Рефералка -->
-  <div id="referral" class="screen">
-    <h2>🤝 Реферальная система</h2>
-    <p>Баланс: <span id="balance">0</span>⭐</p>
-    <button onclick="alert('Скоро промо-материалы 🚀')">📢 Промо-материалы</button>
-    <button onclick="alert('Пригласи друга — получи бонус!')">👥 Пригласить</button>
-    <button class="back" onclick="goBack()">⬅ Назад</button>
-  </div>
+  <!-- Контейнер экранов -->
+  <main id="screens">
+    <!-- Главная -->
+    <section id="screen-home" class="screen active">
+      <!-- Монетный дождь -->
+      <div class="coin-rain" id="coinRain"></div>
 
-  <!-- Рулетка -->
-  <div id="roulette" class="screen">
-    <h2>🎡 Рулетка</h2>
-    <p>Выбирай ставку и крути!</p>
-    <button onclick="spin(200)">🎰 200⭐</button>
-    <button onclick="spin(1500)">🎰 1500⭐</button>
-    <button onclick="spin(10000)">🎰 10000⭐</button>
-    <button class="back" onclick="goBack()">⬅ Назад</button>
-  </div>
+      <!-- Герой -->
+      <div class="hero">
+        <div class="hero-blob"></div>
+        <div class="hero-art" aria-hidden="true">🦠</div>
+        <div class="hero-title">Ты здоров! 😎</div>
+        <div class="hero-sub">Выполняй задания, зови друзей и собирай ⭐ для рулетки</div>
+        <div class="hero-cta">
+          <button class="btn primary" id="btnInvite">👥 Пригласить друга</button>
+          <button class="btn ghost" id="btnLeaderboard">🏆 Рейтинг</button>
+        </div>
+      </div>
 
-  <script>
-    let tg = window.Telegram.WebApp;
-    tg.expand(); // развернуть на весь экран
+      <!-- Разделы -->
+      <div class="cards">
+        <button class="card card-lg" data-open="screen-inventory">
+          <div class="card-icon">🎁</div>
+          <div class="card-title">Инвентарь</div>
+          <div class="card-sub">Выводи NFT-подарки или продавай за ⭐</div>
+        </button>
 
-    function openScreen(id) {
-      document.getElementById("menu").style.display = "none";
-      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-      document.getElementById(id).classList.add("active");
-    }
-    function goBack() {
-      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-      document.getElementById("menu").style.display = "flex";
-    }
+        <button class="card card-lg" data-open="screen-roulette">
+          <div class="card-icon">🎡</div>
+          <div class="card-title">Рулетка</div>
+          <div class="card-sub">200⭐ · 1500⭐ · 10000⭐</div>
+        </button>
 
-    function spin(price) {
-      const outcomes = ["⭐ 50 Stars", "⭐ 200 Stars", "🎁 NFT подарок", "❌ Ничего"];
-      const prize = outcomes[Math.floor(Math.random() * outcomes.length)];
-      alert(`Ты крутил за ${price}⭐ и выиграл: ${prize}`);
-    }
-  </script>
+        <button class="card" data-open="screen-rules">
+          <div class="card-icon">📜</div>
+          <div class="card-title">Правила</div>
+          <div class="card-sub">Как играть и как зарабатывать</div>
+        </button>
+
+        <button class="card" data-open="screen-store">
+          <div class="card-icon">🛒</div>
+          <div class="card-title">Магазин</div>
+          <div class="card-sub">Скоро: скины, бустеры</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- Профиль -->
+    <section id="screen-profile" class="screen">
+      <h2>Профиль ››</h2>
+      <div class="profile-card">
+        <div class="profile-user">
+          <img id="profileAvatar" class="avatar" alt="">
+          <div>
+            <div class="profile-name" id="profileName">Игрок</div>
+            <div class="muted">@webapp</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-title">Баланс ⭐</div>
+            <div class="stat-value" id="starsProfile">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Монеты</div>
+            <div class="stat-value" id="coinsProfile">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Заразил</div>
+            <div class="stat-value" id="infectedProfile">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Вылечились</div>
+            <div class="stat-value" id="curedProfile">0%</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" data-open="screen-tasks">📅 Задания</button>
+        <button class="btn" data-open="screen-leaderboard">🏆 Рейтинг</button>
+      </div>
+    </section>
+
+    <!-- Задания -->
+    <section id="screen-tasks" class="screen">
+      <h2>Ежедневные</h2>
+      <div id="dailyList" class="task-list"></div>
+      <h2>Квесты</h2>
+      <div id="questList" class="task-list"></div>
+      <div class="row">
+        <button class="btn ghost" id="btnMoreTasks">Показать больше</button>
+      </div>
+    </section>
+
+    <!-- “Больше заданий” -->
+    <section id="screen-more-tasks" class="screen">
+      <h2>Крупные квесты</h2>
+      <div id="bigQuestList" class="task-list"></div>
+    </section>
+
+    <!-- Рейтинг (200 фейк-профилей) -->
+    <section id="screen-leaderboard" class="screen">
+      <h2>Рейтинг</h2>
+      <div class="tabs">
+        <button class="tab active" data-tab="global">Общий</button>
+        <button class="tab" data-tab="friends">Друзья</button>
+      </div>
+      <div id="leaderboardList" class="leaderboard"></div>
+    </section>
+
+    <!-- Рулетка -->
+    <section id="screen-roulette" class="screen">
+      <h2>Рулетка</h2>
+      <p class="muted">Выбирай ставку и крути!</p>
+      <div class="row">
+        <button class="btn" data-spin="200">🎰 200⭐</button>
+        <button class="btn" data-spin="1500">🎰 1500⭐</button>
+        <button class="btn" data-spin="10000">🎰 10000⭐</button>
+      </div>
+      <div id="wheel" class="wheel"></div>
+      <div class="row">
+        <button class="btn ghost" data-open="screen-history">🧾 История</button>
+      </div>
+    </section>
+
+    <!-- Инвентарь -->
+    <section id="screen-inventory" class="screen">
+      <h2>Инвентарь</h2>
+      <p id="inventory-empty" class="muted">Пока пусто. Выигрывай призы в рулетке 🥳</p>
+      <div id="inventory-list" class="grid"></div>
+      <div class="row">
+        <button class="btn" id="btn-withdraw">📤 Вывести подарок</button>
+        <button class="btn" id="btn-sell">💱 Продать за ⭐</button>
+      </div>
+    </section>
+
+    <!-- Магазин -->
+    <section id="screen-store" class="screen">
+      <h2>Магазин</h2>
+      <p class="muted">Скоро тут появятся бустеры, скины и премиум-фичи.</p>
+    </section>
+
+    <!-- История -->
+    <section id="screen-history" class="screen">
+      <h2>История</h2>
+      <div id="historyList" class="history-list"></div>
+    </section>
+
+    <!-- Правила -->
+    <section id="screen-rules" class="screen">
+      <h2>Правила</h2>
+      <ol class="rules">
+        <li>Выполняй задания, получай 🪙 монеты.</li>
+        <li>Обменивай монеты на ⭐ и крути рулетку.</li>
+        <li>Зови друзей — получай % с их пополнений.</li>
+        <li>Выигрыши попадают в инвентарь.</li>
+      </ol>
+    </section>
+  </main>
+
+  <!-- Нижняя навигация -->
+  <nav class="bottombar">
+    <button class="nav-btn active" data-open="screen-home">⌛ Главная</button>
+    <button class="nav-btn" data-open="screen-tasks">🦠 Задания</button>
+    <button class="nav-btn" data-open="screen-roulette">🧭 Рулетка</button>
+    <button class="nav-btn" data-open="screen-store">🛍️ Магазин</button>
+    <button class="nav-btn" data-open="screen-history">🧾 История</button>
+  </nav>
+
+  <!-- Тосты -->
+  <div id="toast" class="toast"></div>
+
+  <script src="script.js"></script>
 </body>
 </html>
