@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="bg-grid"></div>
   <header class="app-header">
     <div class="brand">
       <span class="logo">★</span>
@@ -30,9 +31,9 @@
     <section id="view-home" class="view active">
       <div class="hero">
         <div class="hero-coins" aria-hidden="true"></div>
-        <div class="hero-card">
+        <div class="hero-card floating">
           <h1>Добро пожаловать!</h1>
-          <p>Крути рулетку, играй в Crash и забирай призы. Всё — за ⭐.</p>
+          <p>Крути рулетку с NFT-подарками и играй в Crash. Всё — за ⭐.</p>
           <div class="cta-row">
             <button class="primary" data-goto="roulette">Перейти в рулетку</button>
             <button data-goto="play">Играть в Crash</button>
@@ -42,12 +43,13 @@
       </div>
       <div class="home-panels">
         <div class="panel">
-          <h3>Режим Crash</h3>
-          <p>Ставь ⭐, ракета взлетает, множитель растёт. Успей забрать до взрыва!</p>
+          <h3>Crash — непрерывные раунды</h3>
+          <p>Смотри, как ракета летит постоянно. Ставь на <b>следующий раунд</b>,
+            настраивай <b>автовывод</b> и забирай до «💥»!</p>
         </div>
         <div class="panel">
           <h3>Демо-сборка</h3>
-          <p>Данные хранятся локально. Поддержка NFT/TON/Telegram Stars — готовим к интеграции.</p>
+          <p>Все данные локальные. Поддержку реальных NFT/TON/Telegram Stars подключим отдельным бэкендом.</p>
         </div>
       </div>
     </section>
@@ -81,7 +83,7 @@
           <div><span class="muted">Регистрации</span><b id="ref-joins">0</b></div>
           <div><span class="muted">Начислено</span><b id="ref-earn">0 ⭐</b></div>
         </div>
-        <div class="muted small">⚙️ В демо всё локально. В реале подключим бекенд/хук оплаты.</div>
+        <div class="muted small">⚙️ В демо всё локально. В реале подключим хук оплаты.</div>
       </div>
     </section>
 
@@ -93,19 +95,19 @@
       </div>
 
       <div class="boxes">
-        <div class="box-card" data-tier="bronze">
+        <div class="box-card shine" data-tier="bronze">
           <div class="box-emoji">🎁</div>
           <div class="box-title">Бронза</div>
           <div class="box-price">200 ⭐</div>
           <button class="spin-btn" data-tier="bronze">Крутить</button>
         </div>
-        <div class="box-card" data-tier="silver">
+        <div class="box-card shine" data-tier="silver">
           <div class="box-emoji">💠</div>
           <div class="box-title">Серебро</div>
           <div class="box-price">1500 ⭐</div>
           <button class="spin-btn" data-tier="silver">Крутить</button>
         </div>
-        <div class="box-card" data-tier="gold">
+        <div class="box-card shine" data-tier="gold">
           <div class="box-emoji">👑</div>
           <div class="box-title">Золото</div>
           <div class="box-price">10000 ⭐</div>
@@ -140,21 +142,33 @@
     <!-- Играть (Crash) -->
     <section id="view-play" class="view">
       <div class="section-head">
-        <h2>Crash (демо)</h2>
-        <div class="hint">Ставка в ⭐. Ракета взлетает, множитель растёт. Забирай до взрыва.</div>
+        <h2>Crash</h2>
+        <div class="hint">Ракета летит непрерывно. Вставай в <b>следующий раунд</b> и ставь ⭐!</div>
+      </div>
+
+      <!-- Верхняя строка статуса -->
+      <div class="crash-topline glass">
+        <div class="status-badge" id="crash-badge">Ожидание…</div>
+        <div class="ticker" id="crash-ticker"></div>
       </div>
 
       <div class="crash-top">
         <div class="stake">
-          <label>Ставка (⭐)</label>
+          <label>Ставка в ⭐ на <u>следующий</u> раунд</label>
           <div class="stake-row">
-            <input id="crash-bet" type="number" min="1" step="1" value="50" />
+            <input id="crash-bet" type="number" min="1" step="1" value="100" />
             <div class="stake-buttons">
               <button data-bmul="0.5">×0.5</button>
               <button data-bmul="2">×2</button>
               <button data-bmax="1">MAX</button>
             </div>
           </div>
+          <div class="auto-row">
+            <label>Автовывод, ×</label>
+            <input id="auto-cash" type="number" min="1.01" step="0.01" value="1.70" />
+          </div>
+          <button id="join-next" class="primary wide">Встать в очередь (следующий раунд)</button>
+          <div id="queued-hint" class="muted small hidden">Ты в очереди. Ставка спишется при старте.</div>
         </div>
 
         <div class="asset">
@@ -164,25 +178,45 @@
             <button class="asset-btn disabled" title="Скоро" data-asset="nft">🎴 NFT</button>
             <button class="asset-btn disabled" title="Скоро" data-asset="ton">TON</button>
           </div>
+
+          <div class="players">
+            <div class="muted small">Участники раунда</div>
+            <div id="players-grid" class="players-grid"></div>
+          </div>
         </div>
       </div>
 
       <div class="crash-stage">
         <canvas id="crash-canvas"></canvas>
+        <div class="starfield"></div>
         <div class="mult-wrap">
           <div id="crash-mult">1.00×</div>
-          <div id="crash-status" class="muted small">Готов к старту</div>
+          <div id="crash-status" class="muted small">Подготовка…</div>
         </div>
-        <div class="rocket" id="rocket">🚀</div>
+        <div class="rocket" id="rocket">
+          <div class="flame"></div>
+          <div class="trail"></div>
+        </div>
       </div>
 
       <div class="crash-controls">
-        <button id="crash-start" class="primary">Старт</button>
-        <button id="crash-cashout" class="ghost" disabled>Забрать</button>
-        <button id="crash-reset" class="ghost" disabled>Сброс</button>
+        <button id="crash-cashout" class="primary" disabled>Забрать сейчас</button>
+        <button id="crash-leave" class="ghost" disabled>Выйти из очереди</button>
+      </div>
+
+      <div class="two-col">
+        <div class="feed glass">
+          <div class="feed-title">Кэшауты</div>
+          <div id="crash-feed" class="feed-list"></div>
+        </div>
+        <div class="feed glass">
+          <div class="feed-title">Последние раунды</div>
+          <div id="rounds-feed" class="feed-list"></div>
+        </div>
       </div>
 
       <div id="crash-toast" class="toast hidden"></div>
+      <div id="confetti" class="confetti hidden"></div>
     </section>
   </main>
 
