@@ -1,373 +1,279 @@
-// ====== Telegram ======
-const tg = window.Telegram?.WebApp;
-try { tg?.expand(); tg?.setHeaderColor?.("#0f2d2b"); } catch(e){}
+/* ========= STATE ========= */
+const STORAGE_KEY = 'cf_demo_v2';
+const state = { stars: 0, inventory: [], ref: { clicks: 0, joins: 0, earn: 0 }, history: [] };
+function loadState(){ try{const raw=localStorage.getItem(STORAGE_KEY); if(raw)Object.assign(state, JSON.parse(raw)); if(!state.stars)state.stars=1000;}catch{state.stars=1000;} }
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
-// ====== State (LocalStorage) ======
-const state = {
-  coins: Number(localStorage.getItem("cf_coins") || 500),   // стартовый бонус
-  stars: Number(localStorage.getItem("cf_stars") || 0),
-  infected: Number(localStorage.getItem("cf_infected") || 0),
-  curedPct: Number(localStorage.getItem("cf_cured") || 0),
-  inventory: JSON.parse(localStorage.getItem("cf_inventory") || "[]"),
-  history: JSON.parse(localStorage.getItem("cf_history") || "[]"),
-  username: (tg?.initDataUnsafe?.user?.username ? "@"+tg.initDataUnsafe.user.username : "webapp_user"),
-  name: (tg?.initDataUnsafe?.user?.first_name || "Игрок"),
-  uid: (tg?.initDataUnsafe?.user?.id || 123456),
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+function setBalanceView(){ $('#stars-balance').textContent = state.stars.toLocaleString('ru-RU'); }
+function toast(msg, id='toast'){ const t = $('#'+id); t.textContent = msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1800); }
+
+/* ========= ITEMS (NFT) ========= */
+const ITEMS = [
+  { id:'peach', name:'Персик', emoji:'🍑', rarity:'common', value:120, minTier:'bronze' },
+  { id:'clover', name:'Клевер', emoji:'🍀', rarity:'common', value:140, minTier:'bronze' },
+  { id:'duck', name:'Утенок', emoji:'🦆', rarity:'common', value:160, minTier:'bronze' },
+  { id:'cat', name:'Котик', emoji:'🐱', rarity:'common', value:180, minTier:'bronze' },
+  { id:'panda', name:'Панда', emoji:'🐼', rarity:'rare', value:320, minTier:'bronze' },
+  { id:'fox', name:'Лис', emoji:'🦊', rarity:'rare', value:380, minTier:'bronze' },
+  { id:'ufo', name:'НЛО', emoji:'🛸', rarity:'rare', value:450, minTier:'bronze' },
+  { id:'rainbow', name:'Радуга', emoji:'🌈', rarity:'rare', value:520, minTier:'silver' },
+  { id:'unicorn', name:'Единорог', emoji:'🦄', rarity:'epic', value:1200, minTier:'silver' },
+  { id:'dragon', name:'Дракон', emoji:'🐉', rarity:'epic', value:1600, minTier:'silver' },
+  { id:'wizard', name:'Волшебник', emoji:'🧙', rarity:'epic', value:2200, minTier:'silver' },
+  { id:'diamond', name:'Алмаз', emoji:'💎', rarity:'epic', value:2600, minTier:'gold' },
+  { id:'crown', name:'Корона', emoji:'👑', rarity:'legendary', value:5200, minTier:'gold' },
+  { id:'phoenix', name:'Феникс', emoji:'🔥', rarity:'legendary', value:7400, minTier:'gold' },
+];
+const TIERS = {
+  bronze:{ price:200,  weights:{ common:70, rare:25, epic:5, legendary:0.5 } },
+  silver:{ price:1500, weights:{ common:35, rare:45, epic:18, legendary:2 } },
+  gold:{   price:10000,weights:{ common:10, rare:35, epic:40, legendary:15 } },
 };
-function save(){
-  localStorage.setItem("cf_coins", state.coins);
-  localStorage.setItem("cf_stars", state.stars);
-  localStorage.setItem("cf_infected", state.infected);
-  localStorage.setItem("cf_cured", state.curedPct);
-  localStorage.setItem("cf_inventory", JSON.stringify(state.inventory));
-  localStorage.setItem("cf_history", JSON.stringify(state.history));
-}
-function fmt(n){ return new Intl.NumberFormat("ru-RU").format(Math.trunc(n)); }
-function toast(text){
-  const el = document.getElementById("toast");
-  el.textContent = text;
-  el.classList.add("show");
-  setTimeout(()=> el.classList.remove("show"), 1600);
-}
+function tierAllowedItem(tier, it){ const order=['bronze','silver','gold']; return order.indexOf(it.minTier) <= order.indexOf(tier); }
+function labelRarity(r){ return ({common:'Обычный',rare:'Редкий',epic:'Эпический',legendary:'Легендарный'})[r]||r; }
 
-// ====== Top balances & profile render ======
-const coinsTop = document.getElementById("coinsTop");
-const starsTop = document.getElementById("starsTop");
-function renderBalances(){
-  coinsTop.textContent = fmt(state.coins);
-  starsTop.textContent = fmt(state.stars);
-  // Profile mirrors
-  document.getElementById("coinsProfile").textContent = fmt(state.coins);
-  document.getElementById("starsProfile").textContent = fmt(state.stars);
-  document.getElementById("infectedProfile").textContent = fmt(state.infected);
-  document.getElementById("curedProfile").textContent = state.curedPct + "%";
-}
-renderBalances();
+/* ========= NAV ========= */
+function showView(id){ $$('.view').forEach(v=>v.classList.remove('active')); $('#view-'+id).classList.add('active'); if(id==='inventory')renderInventory(); if(id==='referral')renderReferral(); if(id==='roulette')resetResult(); if(id==='play') crashResizeCanvas(); }
+function bindNav(){ $$('.tab-btn').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view))); $$('[data-goto]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.goto))); }
 
-// ====== Navigation ======
-const screens = document.querySelectorAll(".screen");
-const navBtns = document.querySelectorAll(".nav-btn");
-function openScreen(id){
-  screens.forEach(s=>s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-  navBtns.forEach(b=>b.classList.toggle("active", b.dataset.open === id));
-  if(id === "screen-inventory") renderInventory();
-  if(id === "screen-history") renderHistory();
-  if(id === "screen-tasks") renderTasks();
-  if(id === "screen-more-tasks") renderMoreTasks();
-  if(id === "screen-leaderboard") renderLeaderboard();
-  if(id === "screen-profile") renderProfile();
-}
-document.querySelectorAll("[data-open]").forEach(b=>{
-  b.addEventListener("click", ()=> openScreen(b.dataset.open));
-});
-// nav bar
-navBtns.forEach(b=> b.addEventListener("click", ()=> openScreen(b.dataset.open)));
+/* ========= REFERRAL ========= */
+function ensureRefLink(){ const url=new URL(location.href); const me='cf_demo_user'; url.searchParams.set('ref', me); $('#ref-link').textContent = url.toString(); }
+function renderReferral(){ ensureRefLink(); $('#ref-clicks').textContent=state.ref.clicks??0; $('#ref-joins').textContent=state.ref.joins??0; $('#ref-earn').textContent=`${state.ref.earn??0} ⭐`; }
+function bindReferral(){ $('#copy-ref').addEventListener('click',async()=>{ try{await navigator.clipboard.writeText($('#ref-link').textContent.trim()); toast('Ссылка скопирована');}catch{} }); }
 
-// ====== Profile ======
-function avatarUrl(seed){
-  // DiceBear initials / thumbs — быстрый генератор
-  return `https://api.dicebear.com/8.x/thumbs/png?seed=${encodeURIComponent(seed)}&shapeColor=28a745,1fb0ff,f6cc3d,23c5a6`;
-}
-function renderProfile(){
-  document.getElementById("profileName").textContent = state.name;
-  const av = document.getElementById("profileAvatar");
-  av.src = avatarUrl(state.username || "user");
-  av.alt = state.name;
-}
-document.getElementById("btnProfile").onclick = ()=> openScreen("screen-profile");
-
-// ====== Exchange (Coins -> Stars) ======
-document.getElementById("btnExchange").onclick = ()=>{
-  // курс: 1000 монет = 1 ⭐
-  const rate = 1000;
-  const can = Math.floor(state.coins / rate);
-  if(!can) return toast("Мало монет для обмена (нужно ≥ 1000)");
-  state.coins -= can * rate;
-  state.stars += can;
-  state.history.unshift({ t: Date.now(), text: `Обменял ${fmt(can*rate)}🪙 → ${fmt(can)}⭐` });
-  save(); renderBalances(); renderHistory();
-  toast(`+${fmt(can)}⭐`);
-};
-
-// ====== Invite + Leaderboard buttons on Home ======
-document.getElementById("btnInvite").onclick = ()=>{
-  const refId = state.uid;
-  const link = `https://t.me/YOUR_BOT_USERNAME?start=${refId}`;
-  navigator.clipboard?.writeText(link);
-  toast("Реферальная ссылка скопирована");
-};
-document.getElementById("btnLeaderboard").onclick = ()=> openScreen("screen-leaderboard");
-
-// ====== Carousel (рефералка / промо, автосвитч) ======
-const carousel = document.getElementById("carousel");
-const banners = [
-  {
-    icon:"⭐", title:"Партнёрская программа 100%",
-    sub:"Зови друзей и получай ⭐ с каждой оплаты",
-    cta:"Пригласить друга", onClick: ()=> document.getElementById("btnInvite").click()
-  },
-  {
-    icon:"🛒", title:"Скоро Магазин",
-    sub:"Скины, бустеры и спецпредложения",
-    cta:"Магазин", onClick: ()=> openScreen("screen-store")
-  },
-];
-let bannerIdx = 0;
-function renderBanner(){
-  const b = banners[bannerIdx % banners.length];
-  carousel.innerHTML = `
-    <div class="banner">
-      <div class="icon">${b.icon}</div>
-      <div>
-        <div class="title">${b.title}</div>
-        <div class="sub">${b.sub}</div>
-      </div>
-      <div class="cta">
-        <button class="btn ghost" id="bannerBtn">${b.cta}</button>
-      </div>
-    </div>
-  `;
-  document.getElementById("bannerBtn").onclick = b.onClick;
-  bannerIdx++;
-}
-renderBanner();
-setInterval(renderBanner, 5200);
-
-// ====== Coin rain (на главной) ======
-function startCoinRain(){
-  const cont = document.getElementById("coinRain");
-  cont.innerHTML = "";
-  for(let i=0;i<20;i++){
-    const c = document.createElement("div");
-    c.className = "coin";
-    const left = Math.random()*100;
-    const delay = Math.random()*1.5;
-    const dur = 3.5 + Math.random()*2.0;
-    c.style.left = left+"vw";
-    c.style.animationDelay = delay+"s, "+delay+"s";
-    c.style.setProperty("--dur", dur+"s");
-    cont.appendChild(c);
-  }
-}
-startCoinRain();
-
-// ====== Tasks ======
-const daily = [
-  { id:"bonus", icon:"📅", title:"Ежедневный бонус", sub:"+5,000 монет", reward:5000 },
-  { id:"share", icon:"📣", title:"Поделиться историей", sub:"+20,000 монет", reward:20000 },
-  { id:"join",  icon:"📢", title:"Подписаться на канал", sub:"+8,000 монет", reward:8000 },
-];
-const quests = [
-  { id:"inv10",   icon:"👥", title:"Заразить 10 друзей",  sub:"+50,000 монет", reward:50000 },
-  { id:"inv50",   icon:"👥", title:"Заразить 50 друзей",  sub:"+100,000 монет", reward:100000 },
-  { id:"inv100",  icon:"👥", title:"Заразить 100 друзей + NFT «Plague Doctor»", reward:200000, nft:true },
-];
-const bigQuests = [
-  { id:"inv200",  icon:"👥", title:"Заразить 200 друзей",  sub:"+300,000 монет", reward:300000 },
-  { id:"inv1000", icon:"👥", title:"Заразить 1000 друзей + NFT «Чумной доктор»", reward:1000000, nft:true },
-];
-const done = JSON.parse(localStorage.getItem("cf_done") || "{}");
-function saveDone(){ localStorage.setItem("cf_done", JSON.stringify(done)); }
-
-function renderTaskList(holder, arr){
-  holder.innerHTML = "";
-  for(const t of arr){
-    const row = document.createElement("div");
-    row.className = "task";
-    row.innerHTML = `
-      <div class="icon">${t.icon}</div>
-      <div>
-        <div class="title">${t.title}</div>
-        <div class="sub">${t.sub || ""}</div>
-      </div>
-      <div>
-        <button class="btn ${done[t.id]?'ghost':''}" id="t_${t.id}">
-          ${done[t.id] ? "Готово ✓" : "ПРОВЕРИТЬ"}
-        </button>
-      </div>
-    `;
-    holder.appendChild(row);
-    document.getElementById(`t_${t.id}`).onclick = ()=>{
-      if(done[t.id]) return toast("Уже получено");
-      done[t.id] = true; saveDone();
-      state.coins += t.reward || 0;
-      if(t.nft){
-        state.inventory.unshift({title:"NFT Mystery Box", desc:"Выигран за квест"});
-      }
-      state.history.unshift({ t: Date.now(), text:`Квест: «${t.title}» +${fmt(t.reward||0)}🪙` });
-      save(); renderBalances(); renderInventory(); renderHistory();
-      renderTasks();
-      toast("+ награда");
-    };
-  }
-}
-function renderTasks(){
-  renderTaskList(document.getElementById("dailyList"), daily);
-  renderTaskList(document.getElementById("questList"), quests);
-}
-document.getElementById("btnMoreTasks").onclick = ()=> openScreen("screen-more-tasks");
-function renderMoreTasks(){
-  renderTaskList(document.getElementById("bigQuestList"), bigQuests);
-}
-
-// ====== Leaderboard (200 фейков) ======
-let LB = [];
-function seededRandom(seed){
-  // xorshift32
-  let x = seed || 123456789;
-  return ()=> (x ^= x<<13, x ^= x>>>17, x ^= x<<5, (x>>>0) / 4294967296);
-}
-function generateLeaderboard(){
-  const rnd = seededRandom((state.uid % 999999) + 12345);
-  const topics = ["NFT","DeFi","Web3","Crypto","AI","GameFi","Meme","DAO","Builder","Trader"];
-  const namesA = ["Neo","Artem","Luna","Maks","Ilya","Vlad","Eren","Noah","Lira","Kira","Zoe","Inna","Dora","Kane","Rey","Kali","Nova","Mina","Maya","Sage"];
-  const namesB = ["Labs","Dream","Vision","Node","Chain","X","Corp","DAO","Art","Vault","Hub","Meta","Net","Flow","LabsX","Prime","Fox","Wolf","Bear","Monk"];
-  LB = [];
-  for(let i=0;i<200;i++){
-    const nA = namesA[Math.floor(rnd()*namesA.length)];
-    const nB = namesB[Math.floor(rnd()*namesB.length)];
-    const topic = topics[Math.floor(rnd()*topics.length)];
-    const name = `${nA} ${topic} ${nB}`;
-    const score = Math.floor(rnd()*500_000_000) + 50_000;
-    const avatar = avatarUrl(name + i);
-    LB.push({name, score, avatar});
-  }
-  // Вставим игрока в топ случайно
-  LB.splice(Math.floor(rnd()*LB.length), 0, {
-    name: (state.name || "Ты") + " #S", score: Math.max(state.stars*1_000_000 + state.coins*1000, 148),
-    avatar: avatarUrl(state.username || "you")
-  });
-  LB.sort((a,b)=> b.score - a.score);
-}
-generateLeaderboard();
-
-function renderLeaderboard(){
-  const hold = document.getElementById("leaderboardList");
-  hold.innerHTML = "";
-  LB.forEach((u, i)=>{
-    const row = document.createElement("div");
-    row.className = "lb-row";
-    row.innerHTML = `
-      <div class="rank">${i+1}</div>
-      <div style="display:flex;gap:10px;align-items:center">
-        <img src="${u.avatar}" class="avatar" alt="">
-        <div class="lb-name">${u.name}</div>
-      </div>
-      <div class="lb-score">🦠 ${fmt(u.score)}</div>
-    `;
-    hold.appendChild(row);
-  });
-}
-document.querySelectorAll(".tab").forEach(t=>{
-  t.addEventListener("click", ()=>{
-    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-    t.classList.add("active");
-    // у друзей просто покажем подмножество
-    if(t.dataset.tab === "friends"){
-      const small = LB.slice(0,10);
-      const hold = document.getElementById("leaderboardList");
-      hold.innerHTML = "";
-      small.forEach((u, i)=>{
-        const row = document.createElement("div");
-        row.className = "lb-row";
-        row.innerHTML = `
-          <div class="rank">${i+1}</div>
-          <div style="display:flex;gap:10px;align-items:center">
-            <img src="${u.avatar}" class="avatar" alt="">
-            <div class="lb-name">${u.name}</div>
-          </div>
-          <div class="lb-score">🦠 ${fmt(u.score)}</div>
-        `;
-        hold.appendChild(row);
-      });
-    } else {
-      renderLeaderboard();
-    }
-  });
-});
-
-// ====== Inventory ======
+/* ========= INVENTORY ========= */
 function renderInventory(){
-  const list = document.getElementById("inventory-list");
-  const empty = document.getElementById("inventory-empty");
-  list.innerHTML = "";
-  if(state.inventory.length === 0){ empty.style.display = "block"; return; }
-  empty.style.display = "none";
-  for(const item of state.inventory){
-    const div = document.createElement("div");
-    div.className = "inv-item";
-    div.innerHTML = `<div style="font-weight:900">${item.title}</div><div class="muted">${item.desc||""}</div>`;
-    list.appendChild(div);
-  }
-}
-document.getElementById("btn-withdraw").onclick = ()=> toast("Вывод скоро");
-document.getElementById("btn-sell").onclick = ()=> toast("Биржа скоро");
-
-// ====== History ======
-function renderHistory(){
-  const list = document.getElementById("historyList");
-  list.innerHTML = "";
-  if(state.history.length === 0){
-    const p = document.createElement("p"); p.className="muted"; p.textContent="История пуста";
-    list.appendChild(p); return;
-  }
-  state.history.slice(0,50).forEach(h=>{
-    const row = document.createElement("div");
-    row.className = "history-row";
-    const d = new Date(h.t);
-    row.innerHTML = `<span>${h.text}</span><span class="muted">${d.toLocaleString()}</span>`;
-    list.appendChild(row);
+  const grid=$('#inventory-grid'), empty=$('#empty-inventory'); grid.innerHTML='';
+  if(!state.inventory.length){ empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  state.inventory.forEach((it, idx)=>{
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML=`
+      <div class="card-head">
+        <div class="emoji">${it.emoji}</div>
+        <div>
+          <div class="item-name">${it.name}</div>
+          <div class="badge">${labelRarity(it.rarity)}</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="price">${it.value.toLocaleString('ru-RU')} ⭐</div>
+        <button class="ghost sell">Продать</button>
+      </div>`;
+    card.querySelector('.sell').addEventListener('click', ()=>{
+      state.stars += it.value; state.inventory.splice(idx,1); saveState(); setBalanceView(); renderInventory();
+      toast(`+${it.value.toLocaleString('ru-RU')} ⭐`);
+    });
+    grid.appendChild(card);
   });
 }
 
-// ====== Roulette ======
-const wheel = document.getElementById("wheel");
-let spinning = false;
-function spin(price){
-  price = Number(price);
-  if(spinning) return;
-  if(state.stars < price){
-    return toast(`Не хватает ⭐: нужно ${fmt(price)}, у тебя ${fmt(state.stars)}`);
-  }
-  spinning = true;
-  state.stars -= price; save(); renderBalances();
-
-  const outcomes = [
-    { t:"⭐ 50 Stars", stars:50 },
-    { t:"⭐ 200 Stars", stars:200 },
-    { t:"🎁 NFT подарок", stars:0, nft:true },
-    { t:"❌ Ничего", stars:0 },
-    { t:"⭐ 500 Stars", stars:500 },
-  ];
-  const prize = outcomes[Math.floor(Math.random()*outcomes.length)];
-
-  const turns = 6 + Math.floor(Math.random()*3);
-  wheel.style.transition = "transform 2.2s cubic-bezier(.2,.8,.2,1)";
-  wheel.style.transform = `rotate(${turns*360}deg)`;
-
-  setTimeout(()=>{
-    wheel.style.transition = ""; wheel.style.transform = "";
-    let msg = `Результат: ${prize.t}`;
-    if(prize.stars){
-      state.stars += prize.stars;
-      state.history.unshift({ t: Date.now(), text:`Рулетка: +${fmt(prize.stars)}⭐` });
-    }
-    if(prize.nft){
-      state.inventory.unshift({ title:"NFT Mystery Box", desc:"Выигран в рулетке" });
-      state.history.unshift({ t: Date.now(), text:`Рулетка: 🎁 NFT Mystery Box` });
-      renderInventory();
-    }
-    save(); renderBalances(); renderHistory();
-    toast(msg);
-    spinning = false;
-  }, 2300);
+/* ========= ROULETTE ========= */
+let spinning=false, currentPrize=null;
+function weightedRandom(tier){
+  const w=TIERS[tier].weights; const roll=Math.random()*(w.common+w.rare+w.epic+(w.legendary||0)); let acc=0;
+  for(const k of ['common','rare','epic','legendary']){ acc += (w[k]||0); if(roll<=acc) return k; }
+  return 'common';
 }
-document.querySelectorAll("[data-spin]").forEach(b=> b.addEventListener("click", ()=> spin(b.dataset.spin)));
+function choosePrize(tier){
+  const rarity=weightedRandom(tier);
+  const pool=ITEMS.filter(it=>it.rarity===rarity && tierAllowedItem(tier,it));
+  const arr=pool.length?pool:ITEMS.filter(it=>tierAllowedItem(tier,it));
+  return arr[Math.floor(Math.random()*arr.length)];
+}
+function buildTrack(target){
+  const track=$('#wheel-track'); track.innerHTML='';
+  const filler=[]; for(let i=0;i<24;i++) filler.push(ITEMS[Math.floor(Math.random()*ITEMS.length)]);
+  const targetIndex=20+Math.floor(Math.random()*3); filler.splice(targetIndex,0,target);
+  filler.forEach(it=>{
+    const el=document.createElement('div'); el.className='item';
+    el.innerHTML=`<div class="i-emoji">${it.emoji}</div><div class="i-name">${it.name}</div><div class="i-rare">${labelRarity(it.rarity)}</div>`;
+    track.appendChild(el);
+  });
+  return targetIndex;
+}
+function animateSpinToIndex(targetIndex){
+  const track=$('#wheel-track'), wheel=$('#wheel');
+  track.style.transition='none'; track.style.transform='translateX(0px)';
+  const items=$$('.item', track); const sample=items[0].getBoundingClientRect(); const itemW=sample.width+12;
+  const center=(wheel.getBoundingClientRect().width/2)-(sample.width/2);
+  const dist=targetIndex*itemW-center; const time=4500+Math.floor(Math.random()*600); const bez='cubic-bezier(0.08,0.88,0.13,1)';
+  requestAnimationFrame(()=>{ track.style.transition=`transform ${time}ms ${bez}`; track.style.transform=`translateX(${-dist}px)`; });
+  return new Promise(res=>{ const onEnd=()=>{track.removeEventListener('transitionend',onEnd);res();}; track.addEventListener('transitionend',onEnd); });
+}
+function resetResult(){ $('#spin-result').classList.add('hidden'); currentPrize=null; }
+async function spin(tier){
+  if(spinning) return;
+  const price=TIERS[tier].price;
+  if(state.stars<price){ toast(`Не хватает ⭐ (нужно ${price})`); return; }
+  spinning=true; state.stars-=price; saveState(); setBalanceView();
+  const prize=choosePrize(tier); currentPrize=structuredClone(prize);
+  const idx=buildTrack(prize); await animateSpinToIndex(idx);
+  $('#res-emoji').textContent=prize.emoji; $('#res-name').textContent=prize.name; $('#res-rare').textContent=labelRarity(prize.rarity);
+  $('#sell-amount').textContent=prize.value.toLocaleString('ru-RU'); $('#spin-result').classList.remove('hidden'); spinning=false;
+}
+function bindRoulette(){
+  $$('.spin-btn').forEach(b=>b.addEventListener('click',()=>spin(b.dataset.tier)));
+  $('#btn-take').addEventListener('click',()=>{ if(!currentPrize)return; state.inventory.push(currentPrize); state.history.push({t:Date.now(),action:'take',item:currentPrize.id}); saveState(); renderInventory(); resetResult(); toast(`Получено: ${currentPrize.name}`); });
+  $('#btn-sell').addEventListener('click',()=>{ if(!currentPrize)return; const v=currentPrize.value; state.stars+=v; state.history.push({t:Date.now(),action:'sell',item:currentPrize.id,value:v}); saveState(); setBalanceView(); resetResult(); toast(`+${v.toLocaleString('ru-RU')} ⭐`); });
+}
 
-// ====== Init profile avatar/name ======
-renderProfile();
-renderHistory();
-renderInventory();
-renderTasks();
-renderLeaderboard();
+/* ========= CRASH (DEMO) ========= */
+const crash = {
+  canvas: null, ctx: null,
+  w: 0, h: 0,
+  running: false, exploded: false, cashed: false,
+  startTime: 0, mult: 1.0, crashAt: 1.0, bet: 0, locked: 0,
+  raf: 0
+};
+function crashResizeCanvas(){
+  const c = $('#crash-canvas');
+  const rect = c.parentElement.getBoundingClientRect();
+  c.width = Math.floor(rect.width*2); c.height = Math.floor(rect.height*2);
+  crash.w = c.width; crash.h = c.height; crash.canvas = c; crash.ctx = c.getContext('2d'); crashDrawFrame();
+}
+function crashRandomPoint(){
+  // распределение, чаще низкие значения, иногда высоко:
+  // 90% ≤ 2.0x, 9% 2–5x, 1% >5x
+  const r = Math.random();
+  if (r < 0.90) return 1.1 + Math.random()*0.9;       // 1.1–2.0
+  if (r < 0.99) return 2.0 + Math.random()*3.0;       // 2–5
+  return 5.0 + Math.random()*10.0;                    // 5–15
+}
+function crashSetStatus(text){ $('#crash-status').textContent=text; }
+function crashFormatMult(x){ return x.toFixed(2)+'×'; }
+function crashUpdateUI(){
+  $('#crash-mult').textContent = crashFormatMult(crash.mult);
+  $('#crash-start').disabled = crash.running;
+  $('#crash-cashout').disabled = !(crash.running && !crash.exploded);
+  $('#crash-reset').disabled = !(crash.exploded || crash.cashed);
+}
+function crashDrawFrame(){
+  const ctx = crash.ctx; if(!ctx) return;
+  const w=crash.w, h=crash.h; ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  // сетка/звёзды
+  ctx.globalAlpha = 0.2;
+  ctx.strokeStyle = '#2a584a';
+  ctx.beginPath();
+  for(let x=0;x<w;x+=80){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
+  for(let y=0;y<h;y+=80){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // кривая траектории (лог-спираль)
+  ctx.strokeStyle = '#2bd3a4';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  const dur = Math.max(1, (Date.now()-crash.startTime)/1000);
+  const maxT = crash.running ? dur : 0;
+  const k = 0.32; // скорость роста
+  for(let t=0;t<maxT;t+=0.02){
+    const m = Math.exp(k*t); // множитель
+    const x = 40 + (w-120) * Math.min(1, (m-1)/10); // нормируем
+    const y = h-60 - (h-140) * Math.min(1, (m-1)/10);
+    if(t===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // отметка «взорвался»
+  if(crash.exploded){
+    ctx.fillStyle = '#ff7a7a';
+    ctx.beginPath(); ctx.arc(w-100, 60, 18, 0, Math.PI*2); ctx.fill();
+    ctx.font = 'bold 36px ui-sans-serif'; ctx.fillStyle = '#ff7a7a';
+    ctx.fillText('BOOM!', w-210, 70);
+  }
+
+  // позиция ракеты (двигаем emoji элемент)
+  const rocket = $('#rocket');
+  if(crash.running){
+    const t = (Date.now()-crash.startTime)/1000;
+    const m = Math.exp(0.32*t);
+    const px = 40 + ( (rocket.parentElement.getBoundingClientRect().width*2 - 200) ) * Math.min(1,(m-1)/10);
+    const py = (rocket.parentElement.getBoundingClientRect().height*2 - 120) - ( (rocket.parentElement.getBoundingClientRect().height*2 - 220) )*Math.min(1,(m-1)/10);
+    rocket.style.transform = `translate(${px/2}px, ${py/2}px) rotate(-12deg)`;
+  }else{
+    rocket.style.transform = `translate(0px,0px)`;
+  }
+}
+function crashLoop(){
+  if(!crash.running){ crashDrawFrame(); return; }
+  const t = (Date.now()-crash.startTime)/1000;
+  crash.mult = Math.max(1.0, Math.exp(0.32*t)); // растёт экспоненциально
+  $('#crash-mult').textContent = crashFormatMult(crash.mult);
+
+  if(crash.mult >= crash.crashAt){
+    // взрыв
+    crash.exploded = true; crash.running = false;
+    crashSetStatus('Взорвалась на '+crashFormatMult(crash.crashAt));
+    $('#crash-cashout').disabled = true;
+    $('#crash-reset').disabled = false;
+    // ставка сгорела — уже списали при старте
+    state.history.push({t:Date.now(),action:'crash_boom',bet:crash.bet,at:crash.crashAt});
+    saveState();
+    // анимация вспышки
+    const rocket = $('#rocket'); rocket.style.transition='filter 120ms'; rocket.style.filter='drop-shadow(0 0 16px rgba(255,80,80,.9))'; setTimeout(()=>{rocket.style.filter='';},160);
+  }else{
+    crashSetStatus('Летим…'); 
+    crash.raf = requestAnimationFrame(crashLoop);
+  }
+  crashDrawFrame();
+  crashUpdateUI();
+}
+function crashStart(){
+  if(crash.running) return;
+  const bet = Math.max(1, Math.floor( +$('#crash-bet').value || 0 ));
+  if(bet>state.stars){ toast(`Не хватает ⭐`, 'crash-toast'); return; }
+  state.stars -= bet; setBalanceView(); saveState();
+
+  crash.bet = bet; crash.locked = bet;
+  crash.mult = 1.0; crash.crashAt = crashRandomPoint();
+  crash.running = true; crash.exploded = false; crash.cashed=false;
+  crash.startTime = Date.now(); crashSetStatus('Старт!');
+  crashUpdateUI();
+  cancelAnimationFrame(crash.raf);
+  crashLoop();
+}
+function crashCashout(){
+  if(!crash.running || crash.exploded) return;
+  crash.running=false; crash.cashed=true;
+  const payout = Math.floor(crash.bet * crash.mult);
+  state.stars += payout; setBalanceView(); saveState();
+  crashSetStatus('Забрано на '+crashFormatMult(crash.mult)+` (+${payout} ⭐)`);
+  state.history.push({t:Date.now(),action:'crash_cashout',bet:crash.bet,at:crash.mult,payout});
+  crashUpdateUI(); crashDrawFrame();
+}
+function crashReset(){
+  crash.running=false; crash.exploded=false; crash.cashed=false; crash.mult=1.0;
+  crashSetStatus('Готов к старту'); crashUpdateUI(); crashDrawFrame();
+}
+function bindCrash(){
+  crashResizeCanvas(); window.addEventListener('resize', crashResizeCanvas);
+  $('#crash-start').addEventListener('click', crashStart);
+  $('#crash-cashout').addEventListener('click', crashCashout);
+  $('#crash-reset').addEventListener('click', crashReset);
+  // быстрые кнопки ставки
+  $$('.stake-buttons button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const inp=$('#crash-bet'); let v=+inp.value||0;
+      if(b.dataset.bmul){ v=Math.max(1, Math.floor(v*+b.dataset.bmul)); }
+      if(b.dataset.bmax){ v = state.stars; }
+      inp.value = Math.max(1, Math.floor(v));
+    });
+  });
+  // выбор актива (пока только stars)
+  $$('.asset-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(btn.classList.contains('disabled')) return;
+      $$('.asset-btn').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+
+/* ========= INIT ========= */
+loadState(); setBalanceView();
+bindNav(); bindReferral(); bindRoulette(); bindCrash();
+showView('home');
